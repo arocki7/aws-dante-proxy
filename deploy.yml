@@ -1,0 +1,27 @@
+---
+- hosts: localhost
+  gather_facts: no
+  vars_files:
+    - variables.yml
+  
+  roles:
+    - aws-ec2
+
+  environment:
+    - AWS_REGION: "{{ region }}"
+
+- hosts: dante
+  become: yes
+  roles:
+    - dante
+
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Verify the connectivity to SOCKS5.
+      wait_for:
+        host: "{{ dante_instance.instances[0].public_ip_address }}"
+        port: 1080
+        connect_timeout: 3
+        delay: 3
+        timeout: 120

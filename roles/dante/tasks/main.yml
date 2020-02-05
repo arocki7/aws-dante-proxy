@@ -1,0 +1,64 @@
+- name: Install all pre-requisites
+  yum:
+    state: present
+    name:
+      - firewalld
+
+- name: Start and enable the firewall
+  service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Open ports for Dante in firewalld
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  with_items:
+    - 1080/tcp
+
+- name: Add repository for Dante
+  yum_repository:
+    name: ghettoforge
+    description: ghettoforge YUM repo
+    baseurl: http://mirror.ghettoforge.org/distributions/gf/el/7/plus/x86_64/
+    gpgcheck: no
+
+- name: Install Dante.
+  yum:
+    state: present
+    name:
+      - dante-server
+
+- name: Copy the configuration.
+  template:
+    src: sockd.conf.j2
+    dest: /etc/sockd.conf
+  register: configchange
+
+- name: Ensure that /var/run/sockd directory exists.
+  file:
+    state: directory
+    path: /var/run/sockd/
+
+- name: Restart sockd if config is changed.
+  service:
+    name: sockd
+    state: restarted
+  when: configchange.changed
+
+- name: Start and enable the dante
+  service:
+    name: sockd
+    state: started
+    enabled: true
+
+- name: Wait for Dante to be ready
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: 1080
+    connect_timeout: 3
+    delay: 3
+    timeout: 120

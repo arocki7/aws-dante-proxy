@@ -1,0 +1,12 @@
+---
+- hosts: localhost
+  vars_files:
+    - variables.yml
+
+  environment:
+    - AWS_REGION: "{{ region }}"
+  tasks:
+    - name: Destroy EC2 Instance.
+      ec2_instance:
+        state: absent
+        name: "dante-proxy-{{ region }}"

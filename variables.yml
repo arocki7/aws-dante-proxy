@@ -1,0 +1,5 @@
+---
+
+region: ap-south-1
+instance_type: t2.micro
+allow_ip: 188.141.15.11

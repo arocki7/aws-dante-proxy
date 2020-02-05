@@ -1,0 +1,72 @@
+
+- name: Fetch latest Amazon Linux 2 AMIs
+  ec2_ami_info:
+    owner: 137112412989
+    filters:
+      name: "amzn2-ami-hvm-2.*x86_64-gp2"
+      state: available
+  register: amis
+
+- name: Find out the AMI of latest Amazon Linux 2
+  set_fact:
+    ami_id: >
+      {{ amis.images | sort(attribute='creation_date') | last }}
+
+- name: Fetch my current IP
+  uri:
+    url: https://api.ipify.org
+    return_content: yes
+  register: my_ip
+
+- name: Create SG for Dante Socks proxy.
+  ec2_group:
+    name: dante-proxy
+    description: SG for Dante Proxy.
+    rules:
+      - proto: tcp
+        ports:
+        - 22
+        - 1080
+        cidr_ip: "{{ my_ip.content }}/32"
+      - proto: tcp
+        ports:
+        - 22
+        - 1080
+        cidr_ip: "{{ allow_ip }}/32"
+
+- name: Check RSA key is there for the user.
+  stat:
+    path: ~/.ssh/id_rsa
+  register: ssh_key
+
+- name: Generate RSA if it's not there.
+  openssh_keypair:
+    path: ~/.ssh/id_rsa
+    size: 2048
+  when: not ssh_key.stat.exists
+
+- name: Create key pair using RSA Public Key
+  ec2_key:
+    name: dante
+    key_material: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    force: yes
+
+- name: Deploy the EC2 Instance
+  ec2_instance:
+    name: "dante-proxy-{{ region }}"
+    key_name: dante
+    instance_type: "{{ instance_type }}"
+    security_group: dante-proxy
+    network:
+      assign_public_ip: true
+    image_id: "{{ ami_id.image_id }}"
+    tags:
+      Name: "dante-proxy-{{ region }}"
+  register: dante_instance
+
+- name: Add newly added EC2 host
+  add_host:
+    hostname: "{{ dante_instance.instances[0].public_ip_address }}"
+    ansible_ssh_user: ec2-user
+    groups: dante
+  changed_when: false
